@@ -1,12 +1,5 @@
 #!/usr/bin/env node
 
-/**
- * This script sets up the mcp-server-datadog.
- * It initializes an MCP server that integrates with Datadog for incident management.
- * By leveraging MCP, this server can list and retrieve incidents via the Datadog incident API.
- * With a design built for scalability, future integrations with additional Datadog APIs are anticipated.
- */
-
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import {
@@ -16,7 +9,7 @@ import {
 import { log, mcpDatadogVersion } from './utils/helper'
 import { INCIDENT_TOOLS, createIncidentToolHandlers } from './tools/incident'
 import { METRICS_TOOLS, createMetricsToolHandlers } from './tools/metrics'
-import { LOGS_TOOLS, createLogsToolHandlers } from './tools/logs'
+import { LOGS_TOOLS, createLogsToolHandlers } from './tools/logs/tool'
 import { MONITORS_TOOLS, createMonitorsToolHandlers } from './tools/monitors'
 import {
   DASHBOARDS_TOOLS,
@@ -27,6 +20,7 @@ import { HOSTS_TOOLS, createHostsToolHandlers } from './tools/hosts'
 import { ToolHandlers } from './utils/types'
 import { createDatadogConfig } from './utils/datadog'
 import { createDowntimesToolHandlers, DOWNTIMES_TOOLS } from './tools/downtimes'
+import { APM_TOOLS, createAPMToolHandlers } from './tools/apm/tool'
 import { v2, v1 } from '@datadog/datadog-api-client'
 
 const server = new Server(
@@ -45,10 +39,6 @@ server.onerror = (error) => {
   log('error', `Server error: ${error.message}`, error.stack)
 }
 
-/**
- * Handler that retrieves the list of available tools in the mcp-server-datadog.
- * Currently, it provides incident management functionalities by integrating with Datadog's incident APIs.
- */
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
@@ -60,6 +50,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       ...TRACES_TOOLS,
       ...HOSTS_TOOLS,
       ...DOWNTIMES_TOOLS,
+      ...APM_TOOLS,
     ],
   }
 })
@@ -79,10 +70,18 @@ const TOOL_HANDLERS: ToolHandlers = {
   ...createMetricsToolHandlers(new v1.MetricsApi(datadogConfig)),
   ...createLogsToolHandlers(new v2.LogsApi(datadogConfig)),
   ...createMonitorsToolHandlers(new v1.MonitorsApi(datadogConfig)),
-  ...createDashboardsToolHandlers(new v1.DashboardsApi(datadogConfig)),
+  ...createDashboardsToolHandlers(
+    new v1.DashboardsApi(datadogConfig),
+    new v1.NotebooksApi(datadogConfig),
+  ),
   ...createTracesToolHandlers(new v2.SpansApi(datadogConfig)),
   ...createHostsToolHandlers(new v1.HostsApi(datadogConfig)),
   ...createDowntimesToolHandlers(new v1.DowntimesApi(datadogConfig)),
+  ...createAPMToolHandlers(
+    new v2.SpansApi(datadogConfig),
+    new v2.SoftwareCatalogApi(datadogConfig),
+    new v2.LogsApi(datadogConfig),
+  ),
 }
 /**
  * Handler for invoking Datadog-related tools in the mcp-server-datadog.

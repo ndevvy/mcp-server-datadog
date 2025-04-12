@@ -86,28 +86,44 @@ MCP server for the Datadog API, enabling incident management and more.
      - `operation` (optional string): Filter by operation name.
    - **Returns**: Array of matching traces from Datadog APM.
 
-9. `list_hosts`
+9. `list_apm_services`
 
-   - Get list of hosts from Datadog.
+   - Get list of APM services from Datadog.
    - **Inputs**:
-     - `filter` (optional string): Filter string for search results.
-     - `sort_field` (optional string): Field to sort hosts by.
-     - `sort_dir` (optional string): Sort direction (asc/desc).
-     - `start` (optional number): Starting offset for pagination.
-     - `count` (optional number): Max number of hosts to return (max: 1000).
-     - `from` (optional number): Search hosts from this UNIX timestamp.
-     - `include_muted_hosts_data` (optional boolean): Include muted hosts status and expiry.
-     - `include_hosts_metadata` (optional boolean): Include host metadata (version, platform, etc).
-   - **Returns**: Array of hosts with details including name, ID, aliases, apps, mute status, and more.
+     - `name` (optional string): Filter services by name.
+     - `limit` (optional number): Maximum number of services to return (defaults to 100).
+   - **Returns**: List of available APM services.
 
-10. `get_active_hosts_count`
+10. `list_apm_resources`
+
+- Get list of APM resources for a specific service from Datadog.
+- **Inputs**:
+  - `service` (string): Service name to filter resources by.
+  - `limit` (optional number): Maximum number of resources to return (defaults to 100).
+- **Returns**: List of resources (operations) for the specified service.
+
+11. `list_hosts`
+
+- Get list of hosts from Datadog.
+- **Inputs**:
+  - `filter` (optional string): Filter string for search results.
+  - `sort_field` (optional string): Field to sort hosts by.
+  - `sort_dir` (optional string): Sort direction (asc/desc).
+  - `start` (optional number): Starting offset for pagination.
+  - `count` (optional number): Max number of hosts to return (max: 1000).
+  - `from` (optional number): Search hosts from this UNIX timestamp.
+  - `include_muted_hosts_data` (optional boolean): Include muted hosts status and expiry.
+  - `include_hosts_metadata` (optional boolean): Include host metadata (version, platform, etc).
+- **Returns**: Array of hosts with details including name, ID, aliases, apps, mute status, and more.
+
+12. `get_active_hosts_count`
 
     - Get the total number of active hosts in Datadog.
     - **Inputs**:
       - `from` (optional number): Number of seconds from which you want to get total number of active hosts (defaults to 2h).
     - **Returns**: Count of total active and up hosts.
 
-11. `mute_host`
+13. `mute_host`
 
     - Mute a host in Datadog.
     - **Inputs**:
@@ -117,14 +133,14 @@ MCP server for the Datadog API, enabling incident management and more.
       - `override` (optional boolean): If true and the host is already muted, replaces existing end time.
     - **Returns**: Success status and confirmation message.
 
-12. `unmute_host`
+14. `unmute_host`
 
     - Unmute a host in Datadog.
     - **Inputs**:
       - `hostname` (string): The name of the host to unmute.
     - **Returns**: Success status and confirmation message.
 
-13. `list_downtimes`
+15. `list_downtimes`
 
     - List scheduled downtimes from Datadog.
     - **Inputs**:
@@ -132,7 +148,7 @@ MCP server for the Datadog API, enabling incident management and more.
       - `monitorId` (optional number): Filter by monitor ID.
     - **Returns**: Array of scheduled downtimes with details including scope, monitor information, and schedule.
 
-14. `schedule_downtime`
+16. `schedule_downtime`
 
     - Schedule a downtime in Datadog.
     - **Inputs**:
@@ -150,7 +166,7 @@ MCP server for the Datadog API, enabling incident management and more.
         - `until` (optional number): UNIX timestamp for when the recurrence ends.
     - **Returns**: Scheduled downtime details including ID and active status.
 
-15. `cancel_downtime`
+17. `cancel_downtime`
     - Cancel a scheduled downtime in Datadog.
     - **Inputs**:
       - `downtimeId` (number): The ID of the downtime to cancel.

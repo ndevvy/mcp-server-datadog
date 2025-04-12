@@ -16,8 +16,8 @@ export const GetLogsZodSchema = z.object({
  * Defines parameters for querying logs within a time window.
  *
  * @param query - Optional. Additional query filter for log search. Defaults to "*" (all logs)
- * @param from - Required. Start time in epoch seconds
- * @param to - Required. End time in epoch seconds
+ * @param from - Optional. Start time in epoch seconds. Defaults to 24 hours ago.
+ * @param to - Optional. End time in epoch seconds. Defaults to current time.
  * @param limit - Optional. Maximum number of logs to search through. Default is 1000.
  */
 export const GetAllServicesZodSchema = z.object({
@@ -25,8 +25,16 @@ export const GetAllServicesZodSchema = z.object({
     .string()
     .default('*')
     .describe('Optional query filter for log search'),
-  from: z.number().describe('Start time in epoch seconds'),
-  to: z.number().describe('End time in epoch seconds'),
+  from: z
+    .number()
+    .optional()
+    .default(() => Math.floor(Date.now() / 1000) - 24 * 60 * 60)
+    .describe('Start time in epoch seconds. Defaults to 24 hours ago.'),
+  to: z
+    .number()
+    .optional()
+    .default(() => Math.floor(Date.now() / 1000))
+    .describe('End time in epoch seconds. Defaults to current time.'),
   limit: z
     .number()
     .optional()

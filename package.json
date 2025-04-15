@@ -4,7 +4,7 @@
   "description": "MCP server for interacting with Datadog API",
   "repository": {
     "type": "git",
-    "url": "https://github.com/winor30/mcp-server-datadog.git"
+    "url": "https://github.com/ndevvy/mcp-server-datadog.git"
   },
   "type": "module",
   "bin": {

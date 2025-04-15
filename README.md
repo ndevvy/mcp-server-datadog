@@ -1,8 +1,6 @@
 # Datadog MCP Server
 
-![NPM Version](https://img.shields.io/npm/v/%40winor30%2Fmcp-server-datadog)![Build and Test](https://github.com/winor30/mcp-server-datadog/actions/workflows/ci.yml/badge.svg)[![codecov](https://codecov.io/gh/winor30/mcp-server-datadog/graph/badge.svg?token=BG4ZB74X92)](https://codecov.io/gh/winor30/mcp-server-datadog)[![smithery badge](https://smithery.ai/badge/@winor30/mcp-server-datadog)](https://smithery.ai/server/@winor30/mcp-server-datadog)
-
-MCP server for the Datadog API, enabling incident management and more.
+MCP server for the Datadog API, enabling incident management and more. Forked from https://github.com/winor30/mcp-server-datadog
 
 <a href="https://glama.ai/mcp/servers/bu8gtzkwfr">
   <img width="380" height="200" src="https://glama.ai/mcp/servers/bu8gtzkwfr/badge" alt="mcp-server-datadog MCP server" />
@@ -271,10 +269,6 @@ npm run inspector
 ```
 
 The inspector will provide a URL you can open in your browser to see logs and send requests manually.
-
-## Contributing
-
-Contributions are welcome! Feel free to open an issue or a pull request if you have any suggestions, bug reports, or improvements to propose.
 
 ## License
 

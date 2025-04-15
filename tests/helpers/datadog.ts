@@ -2,8 +2,14 @@
 export const baseUrl = 'https://api.datadoghq.com/api'
 
 export interface DatadogToolResponse {
-  content: {
-    type: 'text'
-    text: string
-  }[]
+  content: Array<
+    | {
+        type: 'text'
+        text: string
+      }
+    | {
+        type: 'json'
+        json: unknown
+      }
+  >
 }

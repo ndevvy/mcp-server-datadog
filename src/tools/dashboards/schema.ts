@@ -9,6 +9,28 @@ export const GetDashboardZodSchema = z.object({
   dashboardId: z.string(),
 })
 
+// Define a more structured Widget schema that matches the Datadog API expectation
+const WidgetSchema = z
+  .object({
+    definition: z
+      .object({
+        type: z.string(),
+        title: z.string().optional(),
+        // Other properties will be allowed through unknown
+      })
+      .passthrough(),
+    id: z.number().optional(),
+    layout: z
+      .object({
+        x: z.number().optional(),
+        y: z.number().optional(),
+        width: z.number().optional(),
+        height: z.number().optional(),
+      })
+      .optional(),
+  })
+  .passthrough()
+
 export const CreateDashboardZodSchema = z.object({
   title: z.string().describe('The title of the dashboard'),
   description: z
@@ -20,7 +42,7 @@ export const CreateDashboardZodSchema = z.object({
     .default('ordered')
     .describe('The layout type of the dashboard'),
   widgets: z
-    .array(z.any())
+    .array(WidgetSchema)
     .optional()
     .describe('The widgets to add to the dashboard'),
   tags: z
@@ -79,17 +101,37 @@ export const GetNotebookZodSchema = z.object({
     .describe('Unique ID, assigned when the notebook was created'),
 })
 
+// Define a more structured Cell schema that matches the Datadog API expectation
+// Export this schema so it can be imported by tool.ts
+export const NotebookCellSchema = z
+  .object({
+    type: z.string(),
+    // For markdown cells
+    content: z.string().optional(),
+    // For widget cells - Use a generic record to hopefully translate better for LLM schema generation
+    definition: z.record(z.string(), z.unknown()).optional(),
+  })
+  .passthrough()
+
 export const CreateNotebookZodSchema = z.object({
   name: z.string().describe('The name of the notebook'),
   cells: z
-    .array(z.any())
+    .array(NotebookCellSchema)
     .optional()
     .describe('Cells to include in the notebook'),
-  status: z
-    .enum(['published', 'draft'])
+  time: z
+    .string()
     .optional()
-    .default('draft')
-    .describe('Status of the notebook'),
-  time: z.any().optional().describe('Time settings for the notebook'),
-  metadata: z.any().optional().describe('Additional metadata for the notebook'),
+    .default('1h')
+    .describe('Time settings for the notebook'),
+  metadata: z
+    .record(z.string(), z.unknown())
+    .optional()
+    .describe('Additional metadata for the notebook'),
+})
+
+// Schema for adding a cell to an existing notebook
+export const AddCellToNotebookZodSchema = z.object({
+  notebookId: z.number().describe('The ID of the notebook to add the cell to'),
+  cell: NotebookCellSchema.describe('The cell definition to add'),
 })

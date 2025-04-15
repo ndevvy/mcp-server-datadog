@@ -16,13 +16,6 @@ export const QueryMetricsZodSchema = z.object({
 
 export type QueryMetricsArgs = z.infer<typeof QueryMetricsZodSchema>
 
-export const ListMetricsZodSchema = z.object({
-  query: z
-    .string()
-    .optional()
-    .describe('Search query to filter metrics by name'),
-})
-
 export const ListActiveMetricsZodSchema = z.object({
   from: z.number().describe('Unix timestamp from which to start the query'),
   host: z.string().optional().describe('Filter metrics by host'),
@@ -31,4 +24,8 @@ export const ListActiveMetricsZodSchema = z.object({
 
 export const GetMetricMetadataZodSchema = z.object({
   metricName: z.string().describe('Name of the metric to get metadata for'),
+})
+
+export const SearchMetricsZodSchema = z.object({
+  query: z.string().describe('Search query string to find metrics'),
 })

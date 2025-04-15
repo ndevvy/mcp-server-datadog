@@ -1,10 +1,19 @@
 import { ExtendedTool, ToolHandlers } from '../../utils/types'
 import { v2 } from '@datadog/datadog-api-client'
 import { createToolSchema } from '../../utils/tool'
-import { ListServicesZodSchema, ListResourcesZodSchema } from './schema'
+import {
+  ListServicesZodSchema,
+  SearchResourcesZodSchema,
+  ListOperationsZodSchema,
+  GetResourceHashZodSchema,
+} from './schema'
 import type { LogsAggregateRequest } from '@datadog/datadog-api-client/dist/packages/datadog-api-client-v2/models/LogsAggregateRequest'
 
-type APMToolName = 'list_apm_services' | 'list_apm_resources'
+type APMToolName =
+  | 'list_apm_services'
+  | 'list_apm_resources'
+  | 'list_apm_operations'
+  | 'get_resource_hash'
 type APMTool = ExtendedTool<APMToolName>
 
 const getServicesFromLogs = async (
@@ -74,9 +83,19 @@ export const APM_TOOLS: APMTool[] = [
     'Get list of service names from Datadog',
   ),
   createToolSchema(
-    ListResourcesZodSchema,
+    SearchResourcesZodSchema,
     'list_apm_resources',
-    'Get list of APM resources for a specific service from Datadog',
+    'Get list of APM resources for a specific service from Datadog, optionally filtered by operation name',
+  ),
+  createToolSchema(
+    ListOperationsZodSchema,
+    'list_apm_operations',
+    'Get list of top operation names for a specific service from Datadog',
+  ),
+  createToolSchema(
+    GetResourceHashZodSchema,
+    'get_resource_hash',
+    'Get the resource hash for a specific resource name within a service',
   ),
 ] as const
 
@@ -143,8 +162,11 @@ export const createAPMToolHandlers = (
         return {
           content: [
             {
-              type: 'json',
-              json: { services: uniqueServices, count: uniqueServices.length },
+              type: 'text',
+              text: JSON.stringify({
+                services: uniqueServices,
+                count: uniqueServices.length,
+              }),
             },
           ],
         }
@@ -190,73 +212,142 @@ export const createAPMToolHandlers = (
       }
     },
     list_apm_resources: async (request) => {
-      const { service, limit = 100 } = ListResourcesZodSchema.parse(
-        request.params.arguments,
-      )
+      const {
+        service,
+        search_query,
+        entry_spans_only = true,
+        limit = 1000,
+      } = SearchResourcesZodSchema.parse(request.params.arguments)
 
       try {
-        // Retrieve spans for the specific service to extract resource names
-        const response = await spansApiInstance.listSpans({
+        // Build the query string to filter by service and search_query (if available)
+        let queryString = `service:${service}`
+        if (search_query) {
+          queryString += ` resource_name:*${search_query}*`
+        }
+
+        // Add entry span filter if requested
+        if (entry_spans_only) {
+          queryString += ` @_top_level:1`
+        }
+
+        // Use the span analytics aggregate API to get resources
+        const response = await spansApiInstance.aggregateSpans({
           body: {
             data: {
               attributes: {
+                compute: [
+                  {
+                    aggregation: 'count',
+                    type: 'total',
+                  },
+                ],
                 filter: {
-                  query: `service:${service}`, // Filter by service
+                  query: queryString,
                   from: new Date(
                     Date.now() - 7 * 24 * 60 * 60 * 1000,
                   ).toISOString(), // Last 7 days
                   to: new Date().toISOString(),
                 },
-                sort: '-timestamp',
-                page: { limit: 5000 }, // Match the limit used in list_services previously for consistency
+                groupBy: [
+                  {
+                    facet: 'resource_name',
+                    limit: 1000,
+                    sort: {
+                      order: 'desc',
+                    },
+                    total: true,
+                  },
+                ],
               },
-              type: 'search_request',
+              type: 'aggregate_request',
             },
           },
         })
 
-        if (!response.data) {
-          throw new Error('No spans data returned')
+        // Handle potential errors or empty responses
+        if (
+          !response.data ||
+          !Array.isArray(response.data) ||
+          response.data.length === 0
+        ) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `No resources found for service: ${service}`,
+              },
+            ],
+          }
         }
 
-        // Extract unique resources (operations) from spans
-        const resourcesSet = new Set<string>()
-
-        response.data.forEach((span) => {
-          // Use type assertion to access properties on attributes
-          const attributes = span.attributes as Record<
-            string,
-            string | undefined
-          >
-          // Try different possible property names for operations/resources
-          const resourceName =
-            attributes.name ||
-            attributes.resource ||
-            attributes.operation ||
-            attributes.operation_name
-
-          if (resourceName) {
-            resourcesSet.add(resourceName)
+        // Parse the bucket structure based on the example
+        interface SpansBucket {
+          type: string
+          attributes?: {
+            compute?: Record<string, number>
+            by?: {
+              resource_name?: string
+            }
           }
-        })
+          id: string
+        }
 
-        // Convert to array and apply pagination
-        const resources = Array.from(resourcesSet).slice(0, limit)
+        // Extract resource names and their counts from the buckets
+        const resources = response.data
+          .filter((bucket: unknown): bucket is SpansBucket => {
+            if (typeof bucket !== 'object' || bucket === null) return false
+            const b = bucket as Record<string, unknown>
+            if (!('type' in b) || b.type !== 'bucket') return false
+            if (
+              !('attributes' in b) ||
+              typeof b.attributes !== 'object' ||
+              b.attributes === null
+            )
+              return false
 
-        // Format response
-        const resourcesList = resources.map((resource) => ({
-          name: resource,
-          service,
-        }))
+            const attrs = b.attributes as Record<string, unknown>
+            if (
+              !('by' in attrs) ||
+              typeof attrs.by !== 'object' ||
+              attrs.by === null
+            )
+              return false
+
+            const by = attrs.by as Record<string, unknown>
+            if (
+              !('resource_name' in by) ||
+              typeof by.resource_name !== 'string'
+            )
+              return false
+
+            return by.resource_name !== '__TOTAL__'
+          })
+          .map((bucket) => ({
+            name: bucket.attributes?.by?.resource_name || '',
+            service,
+            count: bucket.attributes?.compute?.c0 || 0,
+          }))
+          .filter((resource) => resource.name !== '')
+          .sort((a, b) => b.count - a.count) // Sort by count descending
+          .slice(0, limit)
+
+        if (resources.length === 0) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `No resources found for service: ${service}`,
+              },
+            ],
+          }
+        }
 
         return {
           content: [
             {
               type: 'text',
-              text: `APM Resources for ${service}: ${JSON.stringify({
-                resources: resourcesList,
-                count: resourcesList.length,
-              })}`,
+              text: JSON.stringify(resources.map((resource) => resource.name)),
             },
           ],
         }
@@ -297,6 +388,298 @@ export const createAPMToolHandlers = (
             {
               type: 'text',
               text: `Error retrieving APM resources: ${String(error)}`,
+            },
+          ],
+        }
+      }
+    },
+    list_apm_operations: async (request) => {
+      const {
+        service,
+        entry_spans_only = false,
+        limit = 100,
+      } = ListOperationsZodSchema.parse(request.params.arguments)
+
+      try {
+        // Build the query string to filter by service
+        let queryString = `service:${service}`
+
+        // Add entry span filter if requested
+        if (entry_spans_only) {
+          queryString += ` @_top_level:1`
+        }
+
+        // Use the span analytics aggregate API to get operations
+        const response = await spansApiInstance.aggregateSpans({
+          body: {
+            data: {
+              attributes: {
+                compute: [
+                  {
+                    aggregation: 'count',
+                    type: 'total',
+                  },
+                ],
+                filter: {
+                  query: queryString,
+                  from: new Date(
+                    Date.now() - 7 * 24 * 60 * 60 * 1000,
+                  ).toISOString(), // Last 7 days
+                  to: new Date().toISOString(),
+                },
+                groupBy: [
+                  {
+                    facet: 'operation_name',
+                    limit: 1000,
+                    sort: {
+                      order: 'desc',
+                    },
+                    total: true,
+                  },
+                ],
+              },
+              type: 'aggregate_request',
+            },
+          },
+        })
+
+        // Handle potential errors or empty responses
+        if (
+          !response.data ||
+          !Array.isArray(response.data) ||
+          response.data.length === 0
+        ) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `No operations found for service: ${service}`,
+              },
+            ],
+          }
+        }
+
+        // Parse the bucket structure
+        interface SpansBucket {
+          type: string
+          attributes?: {
+            compute?: Record<string, number>
+            by?: {
+              operation_name?: string
+            }
+          }
+          id: string
+        }
+
+        // Extract operation names and their counts from the buckets
+        const operations = response.data
+          .filter((bucket: unknown): bucket is SpansBucket => {
+            if (typeof bucket !== 'object' || bucket === null) return false
+            const b = bucket as Record<string, unknown>
+            if (!('type' in b) || b.type !== 'bucket') return false
+            if (
+              !('attributes' in b) ||
+              typeof b.attributes !== 'object' ||
+              b.attributes === null
+            )
+              return false
+
+            const attrs = b.attributes as Record<string, unknown>
+            if (
+              !('by' in attrs) ||
+              typeof attrs.by !== 'object' ||
+              attrs.by === null
+            )
+              return false
+
+            const by = attrs.by as Record<string, unknown>
+            if (
+              !('operation_name' in by) ||
+              typeof by.operation_name !== 'string'
+            )
+              return false
+
+            return by.operation_name !== '__TOTAL__'
+          })
+          .map((bucket) => ({
+            name: bucket.attributes?.by?.operation_name || '',
+            service,
+            count: bucket.attributes?.compute?.c0 || 0,
+          }))
+          .filter((operation) => operation.name !== '')
+          .sort((a, b) => b.count - a.count) // Sort by count descending
+          .slice(0, limit)
+
+        if (operations.length === 0) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `No operations found for service: ${service}`,
+              },
+            ],
+          }
+        }
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                operations.map((operation) => operation.name),
+              ),
+            },
+          ],
+        }
+      } catch (error: unknown) {
+        // Handle all error types with appropriate responses
+        if (
+          typeof error === 'object' &&
+          error !== null &&
+          'message' in error &&
+          typeof error.message === 'string'
+        ) {
+          if (error.message.includes('403')) {
+            // Permission error (403)
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `Error: Your Datadog API credentials don't have sufficient permissions to access APM data. Please check that your API key has APM/Tracing permissions enabled in your Datadog account settings.`,
+                },
+              ],
+            }
+          } else {
+            // Other errors with message
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `Error retrieving APM operations: ${error.message}`,
+                },
+              ],
+            }
+          }
+        }
+
+        // Fallback for unknown error types
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Error retrieving APM operations: ${String(error)}`,
+            },
+          ],
+        }
+      }
+    },
+    get_resource_hash: async (request) => {
+      const { service, resource_name } = GetResourceHashZodSchema.parse(
+        request.params.arguments,
+      )
+
+      try {
+        // Build the query string to filter by service and resource name
+        const queryString = `service:${service} resource_name:${resource_name}`
+
+        // Use the span analytics search API to find the resource hash
+        const response = await spansApiInstance.listSpans({
+          body: {
+            data: {
+              attributes: {
+                filter: {
+                  query: queryString,
+                  from: new Date(
+                    Date.now() - 7 * 24 * 60 * 60 * 1000,
+                  ).toISOString(), // Last 7 days
+                  to: new Date().toISOString(),
+                },
+                sort: 'timestamp',
+                page: {
+                  limit: 1, // We only need one span to get the resource hash
+                },
+              },
+              type: 'search_request',
+            },
+          },
+        })
+
+        // Handle potential errors or empty responses
+        if (
+          !response.data ||
+          !Array.isArray(response.data) ||
+          response.data.length === 0
+        ) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `No spans found for service: ${service} and resource: ${resource_name}`,
+              },
+            ],
+          }
+        }
+
+        // Extract the resource hash from the span data
+        const span = response.data[0]
+        const resourceHash = span.attributes?.resourceHash
+
+        if (!resourceHash) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Resource hash not found for service: ${service} and resource: ${resource_name}`,
+              },
+            ],
+          }
+        }
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ resource_hash: resourceHash }),
+            },
+          ],
+        }
+      } catch (error: unknown) {
+        // Error handling
+        if (
+          typeof error === 'object' &&
+          error !== null &&
+          'message' in error &&
+          typeof error.message === 'string'
+        ) {
+          if (error.message.includes('403')) {
+            // Permission error (403)
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `Error: Your Datadog API credentials don't have sufficient permissions to access APM data. Please check that your API key has APM/Tracing permissions enabled in your Datadog account settings.`,
+                },
+              ],
+            }
+          } else {
+            // Other errors with message
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `Error retrieving resource hash: ${error.message}`,
+                },
+              ],
+            }
+          }
+        }
+
+        // Fallback for unknown error types
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Error retrieving resource hash: ${String(error)}`,
             },
           ],
         }

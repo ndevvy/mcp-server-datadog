@@ -2,10 +2,6 @@
 
 MCP server for the Datadog API, enabling incident management and more. Forked from https://github.com/winor30/mcp-server-datadog
 
-<a href="https://glama.ai/mcp/servers/bu8gtzkwfr">
-  <img width="380" height="200" src="https://glama.ai/mcp/servers/bu8gtzkwfr/badge" alt="mcp-server-datadog MCP server" />
-</a>
-
 ## Features
 
 - **Observability Tools**: Provides a mechanism to leverage key Datadog monitoring features, such as incidents, monitors, logs, dashboards, and metrics, through the MCP server.
@@ -192,10 +188,10 @@ export DATADOG_SITE="your_datadog_site"
 
 ### Installing via Smithery
 
-To install Datadog MCP Server for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@winor30/mcp-server-datadog):
+To install Datadog MCP Server for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@ndevvy/mcp-server-datadog):
 
 ```bash
-npx -y @smithery/cli install @winor30/mcp-server-datadog --client claude
+npx -y @smithery/cli install @ndevvy/mcp-server-datadog --client claude
 ```
 
 ### Manual Installation
@@ -249,7 +245,7 @@ Or specify via `npx`:
   "mcpServers": {
     "mcp-server-datadog": {
       "command": "npx",
-      "args": ["-y", "@winor30/mcp-server-datadog"],
+      "args": ["-y", "@ndevvy/mcp-server-datadog"],
       "env": {
         "DATADOG_API_KEY": "<YOUR_API_KEY>",
         "DATADOG_APP_KEY": "<YOUR_APP_KEY>",

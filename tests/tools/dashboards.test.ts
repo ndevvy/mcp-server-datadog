@@ -1,5 +1,5 @@
 import { v1 } from '@datadog/datadog-api-client'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { createDatadogConfig } from '../../src/utils/datadog'
 import { createDashboardsToolHandlers } from '../../src/tools/dashboards/tool'
 import { createMockToolRequest } from '../helpers/mock'
@@ -49,7 +49,11 @@ describe('Dashboards Tool', () => {
         const response = (await toolHandlers.list_dashboards(
           request,
         )) as unknown as DatadogToolResponse
-        expect(response.content[0].text).toContain('Dashboards')
+        const content = response.content[0]
+        if (content.type !== 'text') {
+          throw new Error('Expected content type to be text')
+        }
+        expect(content.text).toContain('Dashboards')
       })()
 
       server.close()
@@ -123,7 +127,7 @@ describe('Dashboards Tool', () => {
   })
 
   // https://docs.datadoghq.com/ja/api/latest/dashboards/#get-a-dashboard
-  describe.concurrent('get_dashboard', async () => {
+  describe('get_dashboard', async () => {
     it('should get a dashboard', async () => {
       const dashboardId = '123456789'
       const mockHandler = http.get(
@@ -148,9 +152,14 @@ describe('Dashboards Tool', () => {
           request,
         )) as unknown as DatadogToolResponse
 
-        expect(response.content[0].text).toContain('123456789')
-        expect(response.content[0].text).toContain('Dashboard')
-        expect(response.content[0].text).toContain('ordered')
+        const content = response.content[0]
+        if (content.type !== 'text') {
+          throw new Error('Expected content type to be text')
+        }
+        const jsonContent = JSON.parse(content.text)
+        expect(jsonContent.id).toBe('123456789')
+        expect(jsonContent.title).toBe('Dashboard')
+        expect(jsonContent.layoutType).toBe('ordered')
       })()
 
       server.close()
@@ -207,14 +216,14 @@ describe('Dashboards Tool', () => {
   })
 
   // https://docs.datadoghq.com/api/latest/dashboards/#create-a-new-dashboard
-  describe.concurrent('create_dashboard', async () => {
+  describe('create_dashboard', async () => {
     it('should create a dashboard', async () => {
       const mockHandler = http.post(dashboardEndpoint, async () => {
         return HttpResponse.json({
           id: 'abc-123-xyz',
           title: 'Test Dashboard',
           description: 'This is a test dashboard',
-          layoutType: 'ordered',
+          layout_type: 'ordered',
           widgets: [],
           tags: ['test', 'dashboard'],
           url: 'https://app.datadoghq.com/dashboard/abc-123-xyz',
@@ -235,9 +244,12 @@ describe('Dashboards Tool', () => {
           request,
         )) as unknown as DatadogToolResponse
 
-        expect(response.content[0].text).toContain('Dashboard created')
-        expect(response.content[0].text).toContain('Test Dashboard')
-        expect(response.content[0].text).toContain('abc-123-xyz')
+        const content = response.content[0]
+        if (content.type !== 'text') {
+          throw new Error('Expected content type to be text')
+        }
+        expect(content.text).toContain('Test Dashboard')
+        expect(content.text).toContain('abc-123-xyz')
       })()
 
       server.close()
@@ -314,8 +326,12 @@ describe('Dashboards Tool', () => {
         const response = (await toolHandlers.list_notebooks(
           request,
         )) as unknown as DatadogToolResponse
-        expect(response.content[0].text).toContain('Notebooks')
-        expect(response.content[0].text).toContain('Test Notebook')
+        const content = response.content[0]
+        if (content.type !== 'text') {
+          throw new Error('Expected content type to be text')
+        }
+        expect(content.text).toContain('Notebooks')
+        expect(content.text).toContain('Test Notebook')
       })()
 
       server.close()
@@ -348,60 +364,79 @@ describe('Dashboards Tool', () => {
   describe.concurrent('get_notebook', async () => {
     it('should get a notebook', async () => {
       const notebookId = 123456
-      const mockHandler = http.get(
-        `${notebooksEndpoint}/${notebookId}`,
-        async () => {
-          return HttpResponse.json({
-            data: {
-              id: 123456,
+
+      const mockNotebookData = {
+        id: notebookId,
+        type: 'notebooks' as v1.NotebookResourceType,
+        attributes: {
+          name: 'Test Notebook',
+          status: 'published' as v1.NotebookStatus,
+          cells: [
+            {
+              id: 'cell1',
+              type: 'notebook_cells' as v1.NotebookCellResourceType,
               attributes: {
-                name: 'Test Notebook',
-                status: 'published',
-                cells: [
-                  {
-                    type: 'markdown',
-                    content: {
-                      text: '# Test Markdown',
-                    },
-                  },
-                ],
-                time: {
-                  live_span: '1h',
+                definition: {
+                  type: 'markdown' as v1.NotebookMarkdownCellDefinitionType,
+                  text: '# Test Markdown',
                 },
-                metadata: {
-                  is_template: false,
-                },
-                created: {
-                  author_handle: 'user@example.com',
-                  created_at: '2023-01-01T00:00:00.000Z',
-                },
-                modified: {
-                  author_handle: 'user@example.com',
-                  modified_at: '2023-01-02T00:00:00.000Z',
-                },
-              },
-              type: 'notebooks',
+              } as v1.NotebookCellResponseAttributes,
             },
-          })
-        },
+          ],
+          time: {
+            liveSpan: '1h',
+          } as v1.NotebookRelativeTime,
+          metadata: {
+            isTemplate: false,
+          } as v1.NotebookMetadata,
+          created: {
+            authorHandle: 'user@example.com',
+            createdAt: '2023-01-01T00:00:00.000Z',
+          } as unknown as v1.NotebookAuthor,
+          modified: {
+            authorHandle: 'user@example.com',
+            modifiedAt: '2023-01-02T00:00:00.000Z',
+          } as unknown as v1.NotebookAuthor,
+        } as v1.NotebookResponseDataAttributes,
+      }
+
+      const mockGetNotebook = vi
+        .spyOn(notebooksApi, 'getNotebook')
+        .mockResolvedValueOnce({
+          data: mockNotebookData,
+        })
+
+      const request = createMockToolRequest('get_notebook', {
+        notebookId,
+      })
+      const response = (await toolHandlers.get_notebook(
+        request,
+      )) as unknown as DatadogToolResponse
+      const content = response.content[0]
+      if (content.type !== 'text') {
+        throw new Error('Expected content type to be text')
+      }
+
+      const jsonContent = JSON.parse(content.text)
+
+      expect(mockGetNotebook).toHaveBeenCalledWith({ notebookId })
+
+      expect(jsonContent.id).toBe(notebookId)
+      expect(jsonContent.attributes.name).toBe('Test Notebook')
+      expect(jsonContent.attributes.status).toBe('published')
+      expect(jsonContent.attributes.cells[0].attributes.definition.type).toBe(
+        'markdown',
+      )
+      expect(jsonContent.attributes.cells[0].attributes.definition.text).toBe(
+        '# Test Markdown',
+      )
+      expect(jsonContent.attributes.time.liveSpan).toBe('1h')
+      expect(jsonContent.attributes.metadata.isTemplate).toBe(false)
+      expect(jsonContent.attributes.created.authorHandle).toBe(
+        'user@example.com',
       )
 
-      const server = setupServer(mockHandler)
-
-      await server.boundary(async () => {
-        const request = createMockToolRequest('get_notebook', {
-          notebookId,
-        })
-        const response = (await toolHandlers.get_notebook(
-          request,
-        )) as unknown as DatadogToolResponse
-
-        expect(response.content[0].text).toContain('Notebook')
-        expect(response.content[0].text).toContain('Test Notebook')
-        expect(response.content[0].text).toContain('Test Markdown')
-      })()
-
-      server.close()
+      mockGetNotebook.mockRestore()
     })
 
     it('should handle not found errors for notebooks', async () => {

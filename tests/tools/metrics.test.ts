@@ -9,47 +9,8 @@ import { baseUrl, DatadogToolResponse } from '../helpers/datadog'
 
 const metricsEndpoint = `${baseUrl}/v1/query`
 
-// Helper function to safely check text content
 const getTextContent = (item: { type: string; text?: string }): string => {
   return item.type === 'text' && item.text ? item.text : ''
-}
-
-// Define type for JSON content structure
-interface JsonContent {
-  type: 'json'
-  json: {
-    metadata: {
-      type: string
-      [key: string]: unknown
-    }
-    tags: {
-      tags: {
-        host: string[]
-        env: string[]
-        service: string[]
-        [key: string]: string[]
-      }
-    } | null
-    assets: {
-      dashboards: { id: string; title: string }[]
-      monitors: { id: number; name: string }[]
-      notebooks: { id: number; name: string }[]
-      slos: unknown[]
-      [key: string]: unknown
-    } | null
-    [key: string]: unknown
-  }
-}
-
-// Helper function to check if content is JSON type with expected structure
-const isJsonContent = (content: unknown): content is JsonContent => {
-  return (
-    content !== null &&
-    typeof content === 'object' &&
-    'type' in content &&
-    content.type === 'json' &&
-    'json' in content
-  )
 }
 
 describe('Metrics Tool', () => {
@@ -68,7 +29,7 @@ describe('Metrics Tool', () => {
   const toolHandlers = createMetricsToolHandlers(apiInstance, apiInstanceV2)
 
   // https://docs.datadoghq.com/api/latest/metrics/#query-timeseries-data-across-multiple-products
-  describe.concurrent('query_metrics', async () => {
+  describe('query_metrics', async () => {
     it('should query metrics data', async () => {
       const mockHandler = http.get(metricsEndpoint, async () => {
         return HttpResponse.json({
@@ -280,9 +241,9 @@ describe('Metrics Tool', () => {
     })
   })
 
-  // https://docs.datadoghq.com/api/latest/metrics/#search-metrics
-  describe.concurrent('search_metrics', async () => {
-    it('should search for metrics', async () => {
+  // https://docs.datadoghq.com/api/latest/metrics/#search-metrics and https://docs.datadoghq.com/api/latest/metrics/#get-a-list-of-active-metrics
+  describe('get_active_metrics', async () => {
+    it('should search for metrics using the query parameter', async () => {
       const mockHandler = http.get(
         `${baseUrl}/v1/search?q=system.cpu`,
         async () => {
@@ -305,16 +266,18 @@ describe('Metrics Tool', () => {
       const server = setupServer(mockHandler)
 
       await server.boundary(async () => {
-        const request = createMockToolRequest('search_metrics', {
-          query: 'system.cpu',
+        const request = createMockToolRequest('get_active_metrics', {
+          query: 'system.cpu', // Only query is provided for search functionality
         })
-        const response = await toolHandlers.search_metrics(request)
+        const response = await toolHandlers.get_active_metrics(request)
         const typedResponse = response as unknown as DatadogToolResponse
 
         const textContent = getTextContent(typedResponse.content[0])
-        expect(textContent).toContain('Search results for "system.cpu"')
-        expect(textContent).toContain('system.cpu.idle')
-        expect(textContent).toContain('system.cpu.user')
+        expect(textContent).toContain('Search results for "system.cpu":')
+        // Check for structure returned by get_active_metrics handler
+        expect(textContent).toContain('"searchResults":{')
+        expect(textContent).toContain('"metrics":["system.cpu.idle"')
+        expect(textContent).toContain('"activeMetrics":null') // activeMetrics should be null as 'from' wasn't provided
       })()
 
       server.close()
@@ -337,24 +300,80 @@ describe('Metrics Tool', () => {
       const server = setupServer(mockHandler)
 
       await server.boundary(async () => {
-        const request = createMockToolRequest('search_metrics', {
+        const request = createMockToolRequest('get_active_metrics', {
           query: 'non.existent.metric',
         })
-        const response = await toolHandlers.search_metrics(request)
+        const response = await toolHandlers.get_active_metrics(request)
         const typedResponse = response as unknown as DatadogToolResponse
 
         const textContent = getTextContent(typedResponse.content[0])
         expect(textContent).toContain(
-          'Search results for "non.existent.metric"',
+          'Search results for "non.existent.metric":',
         )
         expect(textContent).toContain('"metrics":[]')
+        expect(textContent).toContain('"activeMetrics":null')
+      })()
+
+      server.close()
+    })
+
+    it('should fetch active metrics when from parameter is provided', async () => {
+      const activeMetricsEndpoint = `${baseUrl}/v1/metrics`
+      const searchEndpoint = `${baseUrl}/v1/search?q=system.cpu`
+      const now = Math.floor(Date.now() / 1000)
+      const fromTs = now - 3600 // 1 hour ago
+
+      const activeMetricsMock = http.get(
+        activeMetricsEndpoint,
+        ({ request }) => {
+          const url = new URL(request.url)
+          // Check if 'from' param exists; msw doesn't parse query params easily here
+          if (url.searchParams.has('from')) {
+            return HttpResponse.json({
+              metrics: ['system.cpu.user', 'system.mem.used'],
+              from: String(fromTs), // Convert number to string
+            })
+          }
+          return HttpResponse.json({}, { status: 400 }) // Should not be called without 'from'
+        },
+      )
+
+      const searchMetricsMock = http.get(searchEndpoint, async () => {
+        return HttpResponse.json({
+          results: {
+            metrics: ['system.cpu.idle', 'system.cpu.user'],
+            dashboards: [],
+            monitors: [],
+          },
+        })
+      })
+
+      const server = setupServer(activeMetricsMock, searchMetricsMock)
+
+      await server.boundary(async () => {
+        const request = createMockToolRequest('get_active_metrics', {
+          query: 'system.cpu',
+          from: fromTs, // Provide 'from' to trigger active metrics fetching
+        })
+        const response = await toolHandlers.get_active_metrics(request)
+        const typedResponse = response as unknown as DatadogToolResponse
+
+        const textContent = getTextContent(typedResponse.content[0])
+        expect(textContent).toContain('Search results for "system.cpu":')
+        // Check for both search results and active metrics
+        expect(textContent).toContain('"searchResults":{')
+        expect(textContent).toContain('"metrics":["system.cpu.idle"')
+        expect(textContent).toContain('"activeMetrics":{')
+        expect(textContent).toContain(
+          '"metrics":["system.cpu.user","system.mem.used"]',
+        )
       })()
 
       server.close()
     })
   })
 
-  describe.concurrent('get_metric_metadata', async () => {
+  describe('get_metric_metadata', async () => {
     it('should fetch metadata, tags, and assets for a metric', async () => {
       const metadataEndpoint = `${baseUrl}/v1/metrics/system.cpu.user`
       const tagsEndpoint = `${baseUrl}/v2/metrics/system.cpu.user/tags`
@@ -362,47 +381,179 @@ describe('Metrics Tool', () => {
 
       const metadataMock = http.get(metadataEndpoint, async () => {
         return HttpResponse.json({
+          description:
+            'The percent of time the CPU spent running user space processes.',
+          short_name: 'cpu user',
           type: 'gauge',
-          description: 'The percentage of CPU time spent in user space',
-          short_name: 'system.cpu.user',
-          integration: 'system',
-          statsd_interval: 15,
-          per_unit: 'second',
           unit: 'percent',
+          per_unit: null,
+          statsd_interval: null,
+          integration: 'system',
         })
       })
 
       const tagsMock = http.get(tagsEndpoint, async () => {
         return HttpResponse.json({
-          tags: {
-            host: ['web-01', 'web-02'],
-            env: ['prod', 'staging'],
-            service: ['api', 'web'],
+          data: {
+            type: 'metrics',
+            id: 'system.cpu.user',
+            attributes: {
+              tags: [
+                'availability-zone:us-east-1a',
+                'availability-zone:us-east-1b',
+                'availability-zone:us-east-1c',
+                'availability-zone:us-east-1d',
+                'aws_ec2launchtemplate_version:1',
+                'aws_eks_cluster-name:geppo-v2-prod',
+                'aws_eks_cluster-name:geppo-v8-staging',
+                'cloud_provider:aws',
+                'eks_kubernetes-node-class-name:default',
+                'env:prod',
+                'env:staging',
+                'host:purple-snake-01.rmq6.cloudamqp.com',
+              ],
+            },
           },
         })
       })
 
       const assetsMock = http.get(assetsEndpoint, async () => {
         return HttpResponse.json({
-          dashboards: [
+          data: {
+            id: 'system.cpu.user',
+            type: 'metrics',
+            relationships: {
+              dashboards: {
+                data: [
+                  {
+                    id: 'fxk-iu9-a2r',
+                    type: 'dashboards',
+                  },
+                  {
+                    id: '31163',
+                    type: 'dashboards',
+                  },
+                  {
+                    id: '26',
+                    type: 'dashboards',
+                  },
+                  {
+                    id: 'xkt-2us-g8w',
+                    type: 'dashboards',
+                  },
+                  {
+                    id: 'sze-kcv-zck',
+                    type: 'dashboards',
+                  },
+                  {
+                    id: 'ssz-99i-2vk',
+                    type: 'dashboards',
+                  },
+                  {
+                    id: '9zw-676-xq5',
+                    type: 'dashboards',
+                  },
+                  {
+                    id: '30675',
+                    type: 'dashboards',
+                  },
+                  {
+                    id: '30327',
+                    type: 'dashboards',
+                  },
+                  {
+                    id: '1',
+                    type: 'dashboards',
+                  },
+                  {
+                    id: '17',
+                    type: 'dashboards',
+                  },
+                ],
+              },
+              monitors: {
+                data: [],
+              },
+              notebooks: {
+                data: [
+                  {
+                    id: '6604682',
+                    type: 'notebooks',
+                  },
+                  {
+                    id: '7918899',
+                    type: 'notebooks',
+                  },
+                  {
+                    id: '6594653',
+                    type: 'notebooks',
+                  },
+                  {
+                    id: '9494024',
+                    type: 'notebooks',
+                  },
+                  {
+                    id: '1314706',
+                    type: 'notebooks',
+                  },
+                  {
+                    id: '5983147',
+                    type: 'notebooks',
+                  },
+                  {
+                    id: '10415496',
+                    type: 'notebooks',
+                  },
+                  {
+                    id: '11354656',
+                    type: 'notebooks',
+                  },
+                  {
+                    id: '11337115',
+                    type: 'notebooks',
+                  },
+                  {
+                    id: '11734176',
+                    type: 'notebooks',
+                  },
+                  {
+                    id: '397571',
+                    type: 'notebooks',
+                  },
+                  {
+                    id: '1286125',
+                    type: 'notebooks',
+                  },
+                  {
+                    id: '392772',
+                    type: 'notebooks',
+                  },
+                  {
+                    id: '10361063',
+                    type: 'notebooks',
+                  },
+                  {
+                    id: '11255693',
+                    type: 'notebooks',
+                  },
+                ],
+              },
+              slos: {
+                data: [],
+              },
+            },
+          },
+          included: [
             {
-              id: 'abc-def-123',
-              title: 'System Overview',
+              id: 'fake-id-1',
+              type: 'dashboards',
+              attributes: {
+                popularity: 4,
+                title: 'Fake Dashboard 1',
+                url: '/dashboard/fake-id-1',
+              },
             },
           ],
-          monitors: [
-            {
-              id: 12345,
-              name: 'High CPU Usage Alert',
-            },
-          ],
-          notebooks: [
-            {
-              id: 67890,
-              name: 'CPU Analysis',
-            },
-          ],
-          slos: [],
         })
       })
 
@@ -417,23 +568,23 @@ describe('Metrics Tool', () => {
 
         // Check that metadata, tags and assets are included
         const content = typedResponse.content[0]
-        if (!isJsonContent(content)) {
-          throw new Error('Expected content type to be json')
+        if (content.type !== 'text') {
+          throw new Error('Expected content type to be text')
         }
 
-        expect(content.json.metadata).toBeDefined()
-        expect(content.json.metadata.type).toBe('gauge')
-        expect(content.json.tags).toBeDefined()
-        expect(content.json.tags!.tags).toBeDefined()
-        expect(content.json.tags!.tags.host).toContain('web-01')
-        expect(content.json.tags!.tags.env).toContain('prod')
-        expect(content.json.assets).toBeDefined()
-        expect(content.json.assets!.dashboards).toBeDefined()
-        expect(content.json.assets!.dashboards[0].title).toBe('System Overview')
-        expect(content.json.assets!.monitors).toBeDefined()
-        expect(content.json.assets!.monitors[0].name).toBe(
-          'High CPU Usage Alert',
+        const jsonContent = JSON.parse(content.text)
+
+        expect(jsonContent.metadata).toBeDefined()
+        expect(jsonContent.metadata.type).toBe('gauge')
+        expect(jsonContent.tags).toBeDefined()
+        expect(jsonContent.included_in_assets).toBeDefined()
+        expect(jsonContent.included_in_assets).toBeInstanceOf(Array)
+        expect(jsonContent.included_in_assets![0].id).toBe('fake-id-1')
+        expect(jsonContent.included_in_assets![0].type).toBe('dashboards')
+        expect(jsonContent.included_in_assets![0].attributes.title).toBe(
+          'Fake Dashboard 1',
         )
+        expect(jsonContent.tags).toBeDefined()
       })()
 
       server.close()
@@ -479,14 +630,16 @@ describe('Metrics Tool', () => {
 
         // Check that metadata is included but tags and assets are null
         const content = typedResponse.content[0]
-        if (!isJsonContent(content)) {
-          throw new Error('Expected content type to be json')
+        if (content.type !== 'text') {
+          throw new Error('Expected content type to be text')
         }
 
-        expect(content.json.metadata).toBeDefined()
-        expect(content.json.metadata.type).toBe('count')
-        expect(content.json.tags).toBeNull()
-        expect(content.json.assets).toBeNull()
+        const jsonContent = JSON.parse(content.text)
+
+        expect(jsonContent.metadata).toBeDefined()
+        expect(jsonContent.metadata.type).toBe('count')
+        expect(jsonContent.tags).toBeNull()
+        expect(jsonContent.included_in_assets).toBeNull()
       })()
 
       server.close()

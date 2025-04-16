@@ -190,7 +190,7 @@ export const createDashboardsToolHandlers = (
         content: [
           {
             type: 'text',
-            text: `Dashboard: ${JSON.stringify(response)}`,
+            text: JSON.stringify(response),
           },
         ],
       }
@@ -225,7 +225,7 @@ export const createDashboardsToolHandlers = (
         content: [
           {
             type: 'text',
-            text: `Dashboard created: ${JSON.stringify(response)}`,
+            text: JSON.stringify(response),
           },
         ],
       }
@@ -334,8 +334,8 @@ export const createDashboardsToolHandlers = (
       return {
         content: [
           {
-            type: 'json',
-            json: response,
+            type: 'text',
+            text: JSON.stringify(response?.data),
           },
         ],
       }

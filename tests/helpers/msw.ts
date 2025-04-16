@@ -9,9 +9,13 @@ export function setupServer(...handlers: RequestHandler[]) {
 
 function debugServer(server: SetupServerApi) {
   // Enable network request debugging
-  server.listen({
-    onUnhandledRequest: 'warn',
-  })
+  try {
+    server.listen({
+      onUnhandledRequest: 'warn',
+    })
+  } catch (error) {
+    console.error('Error setting up server:', error)
+  }
 
   // Log all requests that pass through MSW
   server.events.on('request:start', ({ request }) => {

@@ -56,8 +56,8 @@ describe('Logs Tool', () => {
       await server.boundary(async () => {
         const request = createMockToolRequest('get_logs', {
           query: 'service:test-service',
-          from: 1640995100, // epoch seconds
-          to: 1640995200, // epoch seconds
+          from: '1640995100', // epoch seconds as string
+          to: '1640995200', // epoch seconds as string
           limit: 10,
         })
         const response = (await toolHandlers.get_logs(
@@ -85,8 +85,8 @@ describe('Logs Tool', () => {
       await server.boundary(async () => {
         const request = createMockToolRequest('get_logs', {
           query: 'service:non-existent',
-          from: 1640995100,
-          to: 1640995200,
+          from: '1640995100',
+          to: '1640995200',
         })
         const response = (await toolHandlers.get_logs(
           request,
@@ -113,8 +113,8 @@ describe('Logs Tool', () => {
       await server.boundary(async () => {
         const request = createMockToolRequest('get_logs', {
           query: 'service:test',
-          from: 1640995100,
-          to: 1640995200,
+          from: '1640995100',
+          to: '1640995200',
         })
         await expect(toolHandlers.get_logs(request)).rejects.toThrow(
           'No logs data returned',
@@ -137,8 +137,8 @@ describe('Logs Tool', () => {
       await server.boundary(async () => {
         const request = createMockToolRequest('get_logs', {
           query: 'service:test',
-          from: 1640995100,
-          to: 1640995200,
+          from: '1640995100',
+          to: '1640995200',
         })
         await expect(toolHandlers.get_logs(request)).rejects.toThrow()
       })()
@@ -159,8 +159,8 @@ describe('Logs Tool', () => {
       await server.boundary(async () => {
         const request = createMockToolRequest('get_logs', {
           query: 'service:test',
-          from: 1640995100,
-          to: 1640995200,
+          from: '1640995100',
+          to: '1640995200',
         })
         await expect(toolHandlers.get_logs(request)).rejects.toThrow(
           'Rate limit exceeded',
@@ -183,8 +183,8 @@ describe('Logs Tool', () => {
       await server.boundary(async () => {
         const request = createMockToolRequest('get_logs', {
           query: 'service:test',
-          from: 1640995100,
-          to: 1640995200,
+          from: '1640995100',
+          to: '1640995200',
         })
         await expect(toolHandlers.get_logs(request)).rejects.toThrow(
           'Internal server error',
@@ -257,8 +257,8 @@ describe('Logs Tool', () => {
       await server.boundary(async () => {
         const request = createMockToolRequest('get_all_services', {
           query: '*',
-          from: 1640995100, // epoch seconds
-          to: 1640995200, // epoch seconds
+          from: '1640995100', // epoch seconds as string
+          to: '1640995200', // epoch seconds as string
           limit: 100,
         })
         const response = (await toolHandlers.get_all_services(
@@ -325,8 +325,8 @@ describe('Logs Tool', () => {
       await server.boundary(async () => {
         const request = createMockToolRequest('get_all_services', {
           query: '*',
-          from: 1640995100,
-          to: 1640995200,
+          from: '1640995100',
+          to: '1640995200',
           limit: 100,
         })
         const response = (await toolHandlers.get_all_services(
@@ -365,8 +365,8 @@ describe('Logs Tool', () => {
       await server.boundary(async () => {
         const request = createMockToolRequest('get_all_services', {
           query: 'service:non-existent',
-          from: 1640995100,
-          to: 1640995200,
+          from: '1640995100',
+          to: '1640995200',
           limit: 100,
         })
         const response = (await toolHandlers.get_all_services(

@@ -21,6 +21,7 @@ import { ToolHandlers } from './utils/types'
 import { createDatadogConfig } from './utils/datadog'
 import { createDowntimesToolHandlers, DOWNTIMES_TOOLS } from './tools/downtimes'
 import { APM_TOOLS, createAPMToolHandlers } from './tools/apm/tool'
+import { EVENTS_TOOLS, createEventsToolHandlers } from './tools/events/tool'
 import { v2, v1 } from '@datadog/datadog-api-client'
 
 const server = new Server(
@@ -51,6 +52,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       ...HOSTS_TOOLS,
       ...DOWNTIMES_TOOLS,
       ...APM_TOOLS,
+      ...EVENTS_TOOLS,
     ],
   }
 })
@@ -85,6 +87,7 @@ const TOOL_HANDLERS: ToolHandlers = {
     new v2.SoftwareCatalogApi(datadogConfig),
     new v2.LogsApi(datadogConfig),
   ),
+  ...createEventsToolHandlers(new v2.EventsApi(datadogConfig)),
 }
 /**
  * Handler for invoking Datadog-related tools in the mcp-server-datadog.

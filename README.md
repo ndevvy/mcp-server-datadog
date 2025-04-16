@@ -85,23 +85,56 @@ MCP server for the Datadog API, enabling incident management and more. Forked fr
      - `metricName` (string): Name of the metric to get metadata for.
    - **Returns**: Metadata information for the specified metric.
 
-10. `list_active_metrics`
+10. `get_active_metrics`
 
-    - Get list of active metrics with additional filtering options.
-    - **Inputs**:
-      - `from` (number): Unix timestamp from which to start the query.
-      - `host` (optional string): Filter metrics by host.
-      - `tagFilter` (optional string): Filter metrics by tags.
-    - **Returns**: List of active metrics matching the filters.
-
-11. `search_metrics`
-
-    - Search for metrics by name pattern.
+    - Get a list of active metrics with optional filtering by host, tags, and search query.
     - **Inputs**:
       - `query` (string): Search query string to find metrics.
-    - **Returns**: List of metrics matching the search pattern.
+      - `from` (optional number): Unix timestamp from which to start the query (default: 24 hours ago).
+      - `host` (optional string): Filter metrics by host.
+      - `tagFilter` (optional string): Filter metrics by tags (e.g. "env:prod,region:us-east").
+    - **Returns**: List of metrics matching the search query and/or active metrics based on filters.
 
-12. `list_traces`
+11. `analyze_tag_relationships`
+
+    - Show hierarchical relationships between tags across metrics.
+    - **Inputs**:
+      - `from` (optional number): Unix timestamp from which to start analyzing tags (default: now - 1 day).
+      - `limit` (optional number): Maximum number of tag relationships to analyze (default: 50).
+      - `metricPrefix` (optional string): Optional prefix to filter metrics by (e.g., "system." or "aws.").
+    - **Returns**: Analysis of tag relationships showing how tags are related hierarchically.
+
+12. `analyze_tag_cardinality`
+
+    - Identify high-cardinality tags that might cause performance issues.
+    - **Inputs**:
+      - `from` (optional number): Unix timestamp from which to start analyzing tags (default: now - 1 day).
+      - `limit` (optional number): Maximum number of tags to analyze (default: 50).
+      - `metricPrefix` (optional string): Optional prefix to filter metrics by (e.g., "system." or "aws.").
+      - `minCardinality` (optional number): Minimum cardinality threshold to report (default: 10).
+    - **Returns**: Analysis of high-cardinality tags that could impact performance.
+
+13. `visualize_tag_co_occurrence`
+
+    - Visualize which tags frequently appear together for a specific metric.
+    - **Inputs**:
+      - `metricName` (string): Name of the metric to analyze tags for.
+      - `from` (optional number): Unix timestamp from which to start analyzing tags (default: now - 1 day).
+      - `limit` (optional number): Maximum number of tag pairs to analyze (default: 20).
+    - **Returns**: Visualization of tag co-occurrence patterns for the specified metric.
+
+14. `search_events`
+
+    - Search for events in Datadog.
+    - **Inputs**:
+      - `query` (string): Datadog events query string.
+      - `from` (optional string): Start time as string - either epoch seconds or relative time (e.g., "now-40m") (default: "now-24h").
+      - `to` (optional string): End time as string - either epoch seconds or relative time (e.g., "now") (default: "now").
+      - `limit` (optional number): Maximum number of events to return (default: 100).
+      - `sort` (optional string): Sort order for events (default: "-timestamp").
+    - **Returns**: Array of matching events from Datadog.
+
+15. `list_traces`
 
     - Retrieve a list of APM traces from Datadog.
     - **Inputs**:
@@ -114,14 +147,14 @@ MCP server for the Datadog API, enabling incident management and more. Forked fr
       - `operation` (optional string): Filter by operation name.
     - **Returns**: Array of matching traces from Datadog APM.
 
-13. `list_apm_services`
+16. `list_apm_services`
 
     - Get list of APM services from Datadog.
     - **Inputs**:
       - `limit` (optional number): Maximum number of services to return (defaults to 100).
     - **Returns**: List of available APM services.
 
-14. `list_apm_resources`
+17. `list_apm_resources`
 
     - Get list of APM resources for a specific service from Datadog.
     - **Inputs**:
@@ -131,7 +164,7 @@ MCP server for the Datadog API, enabling incident management and more. Forked fr
       - `search_query` (optional string): Search query to filter resource names by.
     - **Returns**: List of resources for the specified service.
 
-15. `list_apm_operations`
+18. `list_apm_operations`
 
     - Get list of top operation names for a specific service from Datadog.
     - **Inputs**:
@@ -140,7 +173,7 @@ MCP server for the Datadog API, enabling incident management and more. Forked fr
       - `limit` (optional number): Maximum number of operations to return (defaults to 100).
     - **Returns**: List of operation names for the specified service.
 
-16. `get_resource_hash`
+19. `get_resource_hash`
 
     - Get the resource hash for a specific resource name within a service.
     - **Inputs**:
@@ -148,7 +181,7 @@ MCP server for the Datadog API, enabling incident management and more. Forked fr
       - `resource_name` (string): Resource name to get the hash for.
     - **Returns**: Resource hash information.
 
-17. `get_all_services`
+20. `get_all_services`
 
     - Extract all unique service names from logs.
     - **Inputs**:
@@ -158,7 +191,7 @@ MCP server for the Datadog API, enabling incident management and more. Forked fr
       - `query` (optional string): Optional query filter for log search.
     - **Returns**: List of unique service names found in logs.
 
-18. `list_hosts`
+21. `list_hosts`
 
     - Get list of hosts from Datadog.
     - **Inputs**:
@@ -172,14 +205,14 @@ MCP server for the Datadog API, enabling incident management and more. Forked fr
       - `include_hosts_metadata` (optional boolean): Include host metadata (version, platform, etc).
     - **Returns**: Array of hosts with details.
 
-19. `get_active_hosts_count`
+22. `get_active_hosts_count`
 
     - Get the total number of active hosts in Datadog.
     - **Inputs**:
       - `from` (optional number): Number of seconds from which you want to get total number of active hosts (defaults to 2h).
     - **Returns**: Count of total active and up hosts.
 
-20. `mute_host`
+23. `mute_host`
 
     - Mute a host in Datadog.
     - **Inputs**:
@@ -189,14 +222,14 @@ MCP server for the Datadog API, enabling incident management and more. Forked fr
       - `override` (optional boolean): If true and the host is already muted, replaces existing end time.
     - **Returns**: Success status and confirmation message.
 
-21. `unmute_host`
+24. `unmute_host`
 
     - Unmute a host in Datadog.
     - **Inputs**:
       - `hostname` (string): The name of the host to unmute.
     - **Returns**: Success status and confirmation message.
 
-22. `list_notebooks`
+25. `list_notebooks`
 
     - Get list of notebooks from Datadog.
     - **Inputs**:
@@ -212,14 +245,14 @@ MCP server for the Datadog API, enabling incident management and more. Forked fr
       - `includeCells` (optional boolean): Value of false excludes the cells and global time for each notebook.
     - **Returns**: List of notebooks matching the specified criteria.
 
-23. `get_notebook`
+26. `get_notebook`
 
     - Get a notebook from Datadog.
     - **Inputs**:
       - `notebookId` (number): Unique ID of the notebook to retrieve.
     - **Returns**: Details of the requested notebook including cells and metadata.
 
-24. `create_notebook`
+27. `create_notebook`
 
     - Create a new notebook in Datadog.
     - **Inputs**:
@@ -229,7 +262,7 @@ MCP server for the Datadog API, enabling incident management and more. Forked fr
       - `metadata` (optional object): Additional metadata for the notebook.
     - **Returns**: Details of the created notebook.
 
-25. `add_cell_to_notebook`
+28. `add_cell_to_notebook`
 
     - Add a cell to an existing Datadog notebook.
     - **Inputs**:
@@ -237,14 +270,14 @@ MCP server for the Datadog API, enabling incident management and more. Forked fr
       - `cell` (object): The cell definition to add.
     - **Returns**: Updated notebook information.
 
-26. `list_downtimes`
+29. `list_downtimes`
 
     - List scheduled downtimes from Datadog.
     - **Inputs**:
       - `currentOnly` (optional boolean): Return only currently active downtimes when true.
     - **Returns**: Array of scheduled downtimes with details.
 
-27. `schedule_downtime`
+30. `schedule_downtime`
 
     - Schedule a downtime in Datadog.
     - **Inputs**:
@@ -258,7 +291,7 @@ MCP server for the Datadog API, enabling incident management and more. Forked fr
       - `recurrence` (optional object): Recurrence settings for the downtime.
     - **Returns**: Scheduled downtime details including ID and active status.
 
-28. `cancel_downtime`
+31. `cancel_downtime`
     - Cancel a scheduled downtime in Datadog.
     - **Inputs**:
       - `downtimeId` (number): The ID of the downtime to cancel.

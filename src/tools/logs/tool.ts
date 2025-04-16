@@ -33,9 +33,9 @@ export const createLogsToolHandlers = (
       body: {
         filter: {
           query,
-          // `from` and `to` are in epoch seconds, but the Datadog API expects milliseconds
-          from: `${from * 1000}`,
-          to: `${to * 1000}`,
+          // Support both numerical and string time formats
+          from: typeof from === 'number' ? `${from * 1000}` : from,
+          to: typeof to === 'number' ? `${to * 1000}` : to,
         },
         page: {
           limit,
@@ -67,9 +67,9 @@ export const createLogsToolHandlers = (
       body: {
         filter: {
           query,
-          // `from` and `to` are in epoch seconds, but the Datadog API expects milliseconds
-          from: `${from * 1000}`,
-          to: `${to * 1000}`,
+          // Support both numerical and string time formats
+          from: typeof from === 'number' ? `${from * 1000}` : from,
+          to: typeof to === 'number' ? `${to * 1000}` : to,
         },
         page: {
           limit,
